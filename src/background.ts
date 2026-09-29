@@ -59,9 +59,11 @@ async function recognizeTexts(texts: { id: string; text: string }[]): Promise<Re
 async function askApproval(id: string): Promise<void> {
   const url = chrome.runtime.getURL(`approve.html?id=${id}`)
   const open = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB], documentUrls: [url] })
-  const windowId = open[0]?.windowId
-  if (windowId !== undefined && windowId >= 0) {
-    await chrome.windows.update(windowId, { focused: true })
+  const existing = open[0]
+  if (existing && existing.windowId >= 0) {
+    // 重新載入：舊視窗可能停在「已允許／已拒絕」的畫面（例如撤銷後又被呼叫）
+    await chrome.tabs.reload(existing.tabId)
+    await chrome.windows.update(existing.windowId, { focused: true })
     return
   }
   await chrome.windows.create({ url, type: 'popup', width: 440, height: 520, focused: true })
@@ -72,7 +74,7 @@ const deps: HandlerDeps = {
   isApproved: (id) => settings.isApproved(id),
   isDenied: (id) => settings.isDenied(id),
   addPending: (id, name) => settings.addPending(id, name),
-  askApproval: (id) => void askApproval(id).catch(() => {}),
+  askApproval: (id) => void askApproval(id).catch((e: unknown) => console.error('無法開啟核准視窗', e)),
   userDictionary: () => settings.dictionary(),
   modelReady: async () => (await modelStatus()).state === 'ready',
   startLoading: () => void ensureOffscreen().catch(() => {}),

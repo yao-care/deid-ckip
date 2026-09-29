@@ -17,6 +17,11 @@ async function init(): Promise<void> {
   $('caller-id').textContent = id
 }
 
+// window.close() 不一定能關閉 chrome.windows.create 開的視窗，直接移除所在視窗
+function closeWindow(): void {
+  chrome.windows.getCurrent().then((w) => (w.id !== undefined ? chrome.windows.remove(w.id) : window.close()), () => window.close())
+}
+
 async function decide(allow: boolean): Promise<void> {
   if (allow) await settings.approve(id)
   else await settings.reject(id)
@@ -24,13 +29,13 @@ async function decide(allow: boolean): Promise<void> {
   const done = $('done')
   done.hidden = false
   done.textContent = allow ? '已允許。回到原本的擴充功能按「重試」即可。' : '已拒絕。之後不會再詢問；可在設定頁取消拒絕。'
-  setTimeout(() => window.close(), 2500)
+  setTimeout(closeWindow, 2500)
 }
 
 // 在別的視窗或設定頁已經決定了：這個視窗直接關閉
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local' || !(changes.approved_callers || changes.denied_callers)) return
-  if ((await settings.isApproved(id)) || (await settings.isDenied(id))) setTimeout(() => window.close(), 1500)
+  if ((await settings.isApproved(id)) || (await settings.isDenied(id))) setTimeout(closeWindow, 1500)
 })
 
 $('allow').addEventListener('click', () => void decide(true))

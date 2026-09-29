@@ -55,6 +55,7 @@ async function approveInPopup(popup: Page): Promise<void> {
   await shot(popup, '2-approve')
   await popup.getByRole('button', { name: '允許' }).click({ timeout: 10_000 })
   await popup.getByText('已允許').waitFor({ timeout: 5_000 })
+  await popup.waitForEvent('close', { timeout: 10_000 })
 }
 
 const shots = join(root, 'docs', 'screenshots')
@@ -215,7 +216,13 @@ async function main(): Promise<void> {
     const pop2 = ctx.waitForEvent('page', { predicate: (p) => p.url().includes('/approve.html'), timeout: 10_000 })
     r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
     check(r.data?.code === 'NOT_APPROVED', '撤銷後 deidentify 回 NOT_APPROVED')
-    const denyPopup = await pop2
+    const denyPopup = await pop2.catch(async (e: unknown) => {
+      const pend = await opt.evaluate(async () => ({
+        contexts: (await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB] })).map((c) => [c.documentUrl, c.windowId, c.tabId]),
+        windows: (await chrome.windows.getAll({ populate: true })).map((w) => [w.id, w.type, w.tabs?.map((t) => t.url)]),
+      }))
+      throw new Error(`沒有跳出核准視窗。開著的頁面：${ctx.pages().map((p) => p.url()).join(' , ')}；狀態：${JSON.stringify(pend)}（${e}）`)
+    })
     check(true, '撤銷後再呼叫，重新跳出核准視窗')
     await denyPopup.getByRole('button', { name: '拒絕' }).click()
     await denyPopup.getByText('已拒絕').waitFor({ timeout: 5_000 })
