@@ -27,6 +27,12 @@ async function decide(allow: boolean): Promise<void> {
   setTimeout(() => window.close(), 2500)
 }
 
+// 在別的視窗或設定頁已經決定了：這個視窗直接關閉
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== 'local' || !(changes.approved_callers || changes.denied_callers)) return
+  if ((await settings.isApproved(id)) || (await settings.isDenied(id))) setTimeout(() => window.close(), 1500)
+})
+
 $('allow').addEventListener('click', () => void decide(true))
 $('deny').addEventListener('click', () => void decide(false))
 void init()

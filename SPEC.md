@@ -146,7 +146,7 @@ Chrome MV3「服務擴充功能」：用 CKIP 中文 NER 模型＋使用者字�
   - 格式必須是 `/^[a-p]{32}$/`，否則回 `INVALID`。
   - 已核准 → 照常處理。
   - 已拒絕 → `ping` 回 `ready: false, approved: false`；`deidentify` 回 `NOT_APPROVED`（訊息說明已被拒絕、可到設定頁取消）；不再詢問。
-  - 未核准 → `ping` 回 `ready: false, approved: false`；`capabilities` 照常回；`deidentify` 回 `NOT_APPROVED`。並把 ID 加入 `pending_callers`（去重，最多保留 20 筆，超過捨棄最舊的），**跳出核准視窗**（`approve.html`，同一呼叫者同時最多一個，關閉後至少隔 30 秒才會再跳出），並在擴充功能圖示顯示徽章。
+  - 未核准 → `ping` 回 `ready: false, approved: false`；`capabilities` 照常回；`deidentify` 回 `NOT_APPROVED`。並把 ID 加入 `pending_callers`（去重，最多保留 20 筆，超過捨棄最舊的），**跳出核准視窗**（`approve.html`，同一呼叫者同時最多一個：每次以 `chrome.runtime.getContexts` 查詢是否已開著，有就帶到前面；不用記憶體記錄，因為 Service Worker 閒置被回收後會遺失。使用者關掉視窗沒有決定時，下次呼叫會再跳出；在任一處決定後，其餘核准視窗自動關閉），並在擴充功能圖示顯示徽章。
 - 核准視窗與設定頁都可「允許」「拒絕」；設定頁另可「撤銷」已允許、「取消拒絕」。
 - 使用流程：呼叫端第一次偵測 → 跳出核准視窗 → 使用者按「允許」→ 回呼叫端按重試。服務不預設任何呼叫者，也不需要知道呼叫端的 ID。
 

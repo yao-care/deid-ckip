@@ -54,27 +54,18 @@ async function recognizeTexts(texts: { id: string; text: string }[]): Promise<Re
   throw new Error(res.error)
 }
 
-// 核准視窗：每個呼叫者同時最多一個，關掉後至少隔 30 秒才會因為再次呼叫而重新跳出
-const approvalWindows = new Map<string, number>()
-const lastAsked = new Map<string, number>()
-const ASK_INTERVAL_MS = 30_000
-
+// 核准視窗：每個呼叫者同時最多一個。不用記憶體記錄已開的視窗（Service Worker 閒置被回收後會遺失），
+// 每次直接向 Chrome 查詢目前開著的核准頁。
 async function askApproval(id: string): Promise<void> {
-  const open = approvalWindows.get(id)
-  if (open !== undefined) {
-    const alive = await chrome.windows.get(open).then(() => true, () => false)
-    if (alive) return void chrome.windows.update(open, { focused: true })
-    approvalWindows.delete(id)
+  const url = chrome.runtime.getURL(`approve.html?id=${id}`)
+  const open = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB], documentUrls: [url] })
+  const windowId = open[0]?.windowId
+  if (windowId !== undefined && windowId >= 0) {
+    await chrome.windows.update(windowId, { focused: true })
+    return
   }
-  if (Date.now() - (lastAsked.get(id) ?? 0) < ASK_INTERVAL_MS) return
-  lastAsked.set(id, Date.now())
-  const w = await chrome.windows.create({ url: `approve.html?id=${id}`, type: 'popup', width: 440, height: 520, focused: true })
-  if (w?.id !== undefined) approvalWindows.set(id, w.id)
+  await chrome.windows.create({ url, type: 'popup', width: 440, height: 520, focused: true })
 }
-
-chrome.windows.onRemoved.addListener((windowId) => {
-  for (const [id, w] of approvalWindows) if (w === windowId) approvalWindows.delete(id)
-})
 
 const deps: HandlerDeps = {
   config,

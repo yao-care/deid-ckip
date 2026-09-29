@@ -105,6 +105,9 @@ async function main(): Promise<void> {
     check(popup.url().includes(`id=${cid}`), '第一次呼叫自動跳出核准視窗')
     r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
     check(r.data?.code === 'NOT_APPROVED', '核准前 deidentify 回 NOT_APPROVED')
+    await call(page, { type: 'ping' }, 3000)
+    await page.waitForTimeout(1500)
+    check(ctx.pages().filter((p) => p.url().includes('/approve.html')).length === 1, '同一個呼叫端重複呼叫，只會有一個核准視窗')
 
     await approveInPopup(popup)
     check(true, '在核准視窗按「允許」')
