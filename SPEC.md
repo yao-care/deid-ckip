@@ -21,6 +21,7 @@ Chrome MV3「服務擴充功能」：用 CKIP 中文 NER 模型＋使用者字�
 | D8 | 模型格式與解碼（實作時決定） | fp32 ONNX（int8 實測標籤一致率僅 88.5%）；tokenizer 以 TS 自行實作並與 HF 逐 token 比對；以限制轉移的 Viterbi 解碼 BIES，取代逐 token 最大值。 |
 | D9 | 不連網的第二道防線 | CSP 加上 `default-src 'self'` 與 `connect-src 'self'`，由瀏覽器擋下任何對外連線。 |
 | D10 | SW 存活 | Chrome 文件沒有寫明等待回覆期間是否算活動，Playwright 實測又可能因自動化連線而偏樂觀，因此加上保活：推論期間 offscreen 每 20 秒送訊息給 SW（文件寫明 offscreen 的訊息會重置閒置計時器）。`pnpm e2e:sw` 驗證延遲 150 秒的請求仍收到回覆。 |
+| D11 | 使用流程（2026-09-29 用戶指示補完） | 服務要同時給「人」與「其他擴充功能」使用，流程見第 14 節：安裝後歡迎頁、側邊欄（去識別化＋還原）、第一次呼叫跳出核准視窗、設定頁字典。 |
 | D7 | 獨立性 | 本 repo 的驗收只看本 repo 的測試與建置；呼叫端的相容測試、E2E、文件更新屬於呼叫端自己的工作（第 12 節僅供參考）。 |
 
 ## 1. 目標與範圍
@@ -140,13 +141,14 @@ Chrome MV3「服務擴充功能」：用 CKIP 中文 NER 模型＋使用者字�
 ### 3.4 呼叫者核准（D3）
 
 - manifest 的 `externally_connectable` 為 `{ "ids": ["*"] }`：任何擴充功能都能送訊息，**不含** `matches`，網頁一律不能呼叫。
-- 核准狀態存在 `chrome.storage.local`：`approved_callers: string[]`、`pending_callers: { id: string; first_seen: number }[]`。只存擴充功能 ID 與時間，不存訊息內容。
+- 核准狀態存在 `chrome.storage.local`：`approved_callers: string[]`、`pending_callers: { id: string; first_seen: number; name?: string }[]`、`denied_callers: string[]`。只存擴充功能 ID、時間與呼叫端自稱的名稱（訊息中選填的 `caller_name`，最多 60 字，未經驗證），不存訊息內容。
 - 收到訊息時先驗 `sender.id`：
   - 格式必須是 `/^[a-p]{32}$/`，否則回 `INVALID`。
   - 已核准 → 照常處理。
-  - 未核准 → `ping` 回 `ready: false, approved: false`；`capabilities` 照常回；`deidentify` 回 `NOT_APPROVED`。並把 ID 加入 `pending_callers`（去重，最多保留 20 筆，超過捨棄最舊的），在擴充功能圖示顯示徽章提醒。
-- 設定頁列出待核准與已核准的 ID，可「允許」「拒絕」「撤銷」。拒絕即從待核准清單移除。
-- 使用流程：呼叫端第一次偵測時會看到「沒有回應」卡片 → 使用者到 deid-ckip 設定頁允許 → 回呼叫端按重試。README 要寫清楚這個流程；服務不預設任何呼叫者，也不需要知道呼叫端的 ID。
+  - 已拒絕 → `ping` 回 `ready: false, approved: false`；`deidentify` 回 `NOT_APPROVED`（訊息說明已被拒絕、可到設定頁取消）；不再詢問。
+  - 未核准 → `ping` 回 `ready: false, approved: false`；`capabilities` 照常回；`deidentify` 回 `NOT_APPROVED`。並把 ID 加入 `pending_callers`（去重，最多保留 20 筆，超過捨棄最舊的），**跳出核准視窗**（`approve.html`，同一呼叫者同時最多一個，關閉後至少隔 30 秒才會再跳出），並在擴充功能圖示顯示徽章。
+- 核准視窗與設定頁都可「允許」「拒絕」；設定頁另可「撤銷」已允許、「取消拒絕」。
+- 使用流程：呼叫端第一次偵測 → 跳出核准視窗 → 使用者按「允許」→ 回呼叫端按重試。服務不預設任何呼叫者，也不需要知道呼叫端的 ID。
 
 ## 4. service.yaml
 
@@ -211,8 +213,8 @@ test/
 - `manifest_version: 3`，`name`／`version` 取自 service.yaml。
 - `key`：`service.yaml` 的 `extension.key`。
 - `externally_connectable: { ids: ["*"] }`。**不要**加 `matches`，不開放任何網頁。
-- `permissions: ["offscreen", "storage"]`（storage 只存 8.1 列出的鍵：信心門檻、呼叫者核准狀態；**不存原文**）。
-- `action`：點擊開啟設定頁，用來顯示待核准徽章。
+- `permissions: ["offscreen", "storage", "sidePanel"]`（皆不會跳出權限警告；storage 只存 8.1 列出的鍵：信心門檻、呼叫者核准狀態、使用者字典；**不存收到的文字**）。
+- `action`：點擊開啟側邊欄（`side_panel.default_path: sidepanel.html`），圖示顯示待核准徽章。
 - `options_page: options.html`。
 - `content_security_policy.extension_pages`：`"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self'"`（ONNX Runtime Web 需要 wasm；`connect-src 'self'` 讓瀏覽器擋下任何對外連線）。
 - **不要**宣告 `host_permissions`；不要有任何 `fetch` 到外部網址。
@@ -283,7 +285,7 @@ test/
 - `TOO_LARGE`、`INVALID`、`NOT_APPROVED` 錯誤格式。
 - 核准：未核准 ID 的 `deidentify` 被拒、`ping` 回 `approved: false` 且被列入待核准；待核准清單去重且上限 20；格式不符的 `sender.id` 回 `INVALID`；核准後放行、撤銷後再被拒。
 - 不保存原文（D5）：
-  - 靜態：`src/` 內的 `fetch(` 只能是 `fetch(chrome.runtime.getURL(`；沒有 `XMLHttpRequest`、`WebSocket`、`EventSource`、`navigator.sendBeacon`；`chrome.storage` 只出現在 `settings.ts`；`settings.ts` 只寫入鍵 `threshold`、`approved_callers`、`pending_callers`。
+  - 靜態：`src/` 內的 `fetch(` 只能是 `fetch(chrome.runtime.getURL(`；沒有 `XMLHttpRequest`、`WebSocket`、`EventSource`、`navigator.sendBeacon`；`chrome.storage` 的寫入只在 `settings.ts`；`settings.ts` 只寫入鍵 `threshold`、`approved_callers`、`pending_callers`、`denied_callers`、`dictionary`（字典是使用者在設定頁自己輸入的詞，不是收到的文字）。
   - 執行期：用假的 `chrome.storage` 跑完整的 ping → deidentify 流程，確認儲存內容只有上述三個鍵，且序列化後不含任何輸入文字、字典詞或 `existing_mapping` 的原文。
 
 ### 8.2 契約 fixture
@@ -335,3 +337,33 @@ test/
 
 - `README.md`：用途、呼叫者核准流程、目前已知呼叫端 ID、模型轉換步驟、建置與本機載入方式、SW 存活驗證結論、已知限制。
 - 契約 fixture 與 `service.yaml` 版本號。
+
+## 14. 使用流程（D11）
+
+服務同時提供給兩種使用者：人，以及其他擴充功能。
+
+```mermaid
+flowchart TD
+    A[安裝] --> B[自動開啟歡迎頁 welcome.html：說明用法、立即載入模型、顯示「可以使用」]
+    B --> C{使用方式}
+    C -->|人自己用| D[點工具列圖示 → 側邊欄 sidepanel.html]
+    D --> D1[貼文字 → 去識別化；低信心以黃色標記]
+    D1 --> D2[複製給 AI]
+    D2 --> D3[貼回 AI 回覆 → 還原]
+    D3 --> D4[對照表只在側邊欄記憶體，關閉即清除]
+    C -->|其他擴充功能| E[第一次呼叫 deid@1]
+    E --> E1[跳出核准視窗 approve.html]
+    E1 -->|允許| E2[記住；呼叫端重試後自動處理]
+    E1 -->|拒絕| E3[記住；不再詢問，回 NOT_APPROVED]
+    C -->|管理| F[設定頁 options.html：字典、允許/撤銷/取消拒絕、信心門檻、模型狀態]
+
+    style A fill:#0f766e,color:#ffffff
+    style C fill:#b45309,color:#ffffff
+    style E1 fill:#fef3c7,color:#1c1917
+    style D1 fill:#fef3c7,color:#1c1917
+```
+
+- **側邊欄**：使用與呼叫端相同的代號格式（`〔{role}{letter}〕`）；同一次開啟期間多次去識別化共用對照表；「清除，重新開始」清空對照表。還原為純函式 `restore()`（長代號優先）。
+- **字典**：設定頁管理，存在 `chrome.storage.local` 的 `dictionary`；側邊欄與 deid@1 呼叫都套用，同一詞以呼叫端送來的類型為準。
+- **歡迎頁**：只在第一次安裝（`onInstalled` reason 為 `install`）開啟。
+- **端對端測試**：`pnpm e2e` 依序驗證上述流程；`pnpm e2e --shots` 更新 `docs/screenshots/`（README 使用）。

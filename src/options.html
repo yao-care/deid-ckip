@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>去識別化（CKIP）設定</title>
-    <link rel="stylesheet" href="options.css" />
+    <link rel="stylesheet" href="ui.css" />
     <script type="module" src="options.js"></script>
   </head>
   <body>
@@ -20,36 +20,52 @@
           <dt>版本</dt><dd id="version"></dd>
           <dt>協定</dt><dd id="protocol"></dd>
           <dt>擴充功能 ID</dt><dd><code id="ext-id"></code></dd>
-          <dt>模型</dt><dd><span id="model-state" class="pill"></span> <button id="load" type="button">載入模型</button></dd>
+          <dt>模型</dt><dd><span id="model-state" class="pill"></span></dd>
         </dl>
         <p id="model-error" class="error" hidden></p>
       </section>
 
       <section>
-        <h2>呼叫者核准</h2>
-        <p class="muted">其他擴充功能第一次呼叫時會列在「待核准」。確認是你信任的擴充功能後再允許；可到 chrome://extensions 比對 ID。</p>
-        <h3>待核准</h3>
+        <h2>字典</h2>
+        <p class="muted">一定要替換的名稱（例如模型漏掉的醫院、常出現的人名）。自己使用和其他擴充功能呼叫時都會套用。只存在這台電腦的瀏覽器。</p>
+        <form id="dict-form" class="row">
+          <input id="dict-term" placeholder="詞，例如：成大醫院" required maxlength="100" />
+          <select id="dict-type">
+            <option value="PERSON">人物</option>
+            <option value="GPE">地點</option>
+            <option value="ORG" selected>機構</option>
+            <option value="FAC">設施</option>
+            <option value="NORP">族群</option>
+            <option value="DATE">日期</option>
+            <option value="TIME">時間</option>
+            <option value="__custom">自訂…</option>
+          </select>
+          <input id="dict-custom" placeholder="自訂類型，例如：病人" maxlength="20" hidden />
+          <button type="submit">加入</button>
+        </form>
+        <p id="dict-error" class="error" hidden></p>
+        <ul id="dictionary" class="list"></ul>
+      </section>
+
+      <section>
+        <h2>其他擴充功能</h2>
+        <p class="muted">其他擴充功能第一次呼叫時會跳出視窗詢問；也可以在這裡處理。可到 chrome://extensions 比對 ID。</p>
+        <h3>等待核准</h3>
         <ul id="pending" class="list"></ul>
-        <h3>已核准</h3>
+        <h3>已允許</h3>
         <ul id="approved" class="list"></ul>
+        <h3>已拒絕</h3>
+        <ul id="denied" class="list"></ul>
       </section>
 
       <section>
         <h2>信心門檻</h2>
-        <p class="muted">模型信心低於門檻的實體仍會替換，但會回報給呼叫端，請使用者確認。</p>
+        <p class="muted">模型信心低於門檻的地方仍會替換，但會標出來請你確認（側邊欄以黃色標記；其他擴充功能會停下來請你確認）。</p>
         <form id="threshold-form" class="row">
           <input id="threshold" type="number" min="0" max="1" step="0.05" required />
           <button type="submit">儲存</button>
           <span id="threshold-saved" class="muted" hidden>已儲存</span>
         </form>
-      </section>
-
-      <section>
-        <h2>測試</h2>
-        <p class="muted">貼一段文字看替換結果。只在記憶體處理，不保存。</p>
-        <textarea id="test-input" rows="5" placeholder="例如：王小明於 2023 年 3 月 5 日在台中榮民總醫院就診。"></textarea>
-        <div class="row"><button id="test-run" type="button">執行</button></div>
-        <pre id="test-output" hidden></pre>
       </section>
     </main>
   </body>

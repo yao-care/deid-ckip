@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NOT_APPROVED_MESSAGE } from '../src/handler.ts'
+import { DENIED_MESSAGE, NOT_APPROVED_MESSAGE } from '../src/handler.ts'
 import { MAX_PENDING } from '../src/settings.ts'
 import { CALLER, findEntities, harness, OTHER } from './helpers.ts'
 
@@ -57,13 +57,33 @@ describe('呼叫者核准', () => {
     expect(await h.call(req([{ id: '0:0', text: '甲' }]), OTHER)).toHaveProperty('code', 'NOT_APPROVED')
   })
 
-  it('拒絕只移出待核准清單，下次呼叫會再出現', async () => {
+  it('未核准的呼叫會請使用者核准，並記下呼叫端自稱的名稱', async () => {
+    const h = harness({ approved: [] })
+    await h.call({ type: 'ping', caller_name: '  research-evidence\u0007 ' }, OTHER)
+    expect(h.asked).toEqual([OTHER])
+    expect(await h.settings.pending()).toEqual([{ id: OTHER, first_seen: 1759100000000, name: 'research-evidence' }])
+  })
+
+  it('拒絕後記住：不再列入待核准、不再詢問，deidentify 回拒絕訊息；取消拒絕後恢復詢問', async () => {
     const h = harness({ approved: [] })
     await h.call({ type: 'ping' }, OTHER)
     await h.settings.reject(OTHER)
+    h.asked.length = 0
+    expect(await h.call({ type: 'ping' }, OTHER)).toMatchObject({ ready: false, approved: false })
+    expect(await h.call(req([{ id: '0:0', text: '甲' }]), OTHER)).toEqual({ error: DENIED_MESSAGE, code: 'NOT_APPROVED' })
     expect(await h.settings.pending()).toEqual([])
+    expect(h.asked).toEqual([])
+    await h.settings.undeny(OTHER)
     await h.call({ type: 'ping' }, OTHER)
-    expect(await h.settings.pending()).toHaveLength(1)
+    expect(h.asked).toEqual([OTHER])
+  })
+
+  it('拒絕後改為允許，會從拒絕清單移除', async () => {
+    const h = harness({ approved: [] })
+    await h.settings.reject(OTHER)
+    await h.settings.approve(OTHER)
+    expect(await h.settings.denied()).toEqual([])
+    expect(await h.call({ type: 'ping' }, OTHER)).toMatchObject({ approved: true })
   })
 
   it('待核准清單去重，最多保留最新 20 筆', async () => {
@@ -123,6 +143,14 @@ describe('deidentify', () => {
   it('entity_types 為空時只做字典，不需要模型', async () => {
     const r = await harness({ model: 'failed' }).call(req([{ id: '0:0', text: '林醫師來了' }], { entity_types: [], dictionary: [{ term: '林醫師', type: 'PERSON' }] }))
     expect(r.texts).toEqual([{ id: '0:0', text: '〔人物A〕來了' }])
+  })
+
+  it('使用者字典與呼叫端字典合併，同一詞以呼叫端為準', async () => {
+    const h = harness()
+    await h.settings.addTerm('成大醫院', 'ORG')
+    await h.settings.addTerm('阿土伯', '病人')
+    const r = await h.call(req([{ id: '0:0', text: '阿土伯在成大醫院' }], { dictionary: [{ term: '阿土伯', type: 'PERSON' }] }))
+    expect(r.texts[0].text).toBe('〔人物A〕在〔機構A〕')
   })
 
   it('設定頁調整的門檻會套用', async () => {

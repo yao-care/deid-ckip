@@ -24,9 +24,10 @@ export function manifestOf(svc: ServiceYaml): Record<string, unknown> {
     key: svc.extension.key,
     minimum_chrome_version: '116',
     background: { service_worker: 'background.js', type: 'module' },
-    permissions: ['offscreen', 'storage'],
+    permissions: ['offscreen', 'storage', 'sidePanel'],
     externally_connectable: { ids: ['*'] },
     action: { default_title: svc.name },
+    side_panel: { default_path: 'sidepanel.html' },
     options_page: 'options.html',
     content_security_policy: { extension_pages: CSP },
   }
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
     max_chars_per_request: svc.max_chars_per_request,
   }
   await build({
-    entryPoints: ['background', 'offscreen', 'options'].map((n) => join(root, 'src', `${n}.ts`)),
+    entryPoints: ['background', 'offscreen', 'options', 'sidepanel', 'approve', 'welcome'].map((n) => join(root, 'src', `${n}.ts`)),
     outdir: out,
     bundle: true,
     format: 'esm',
@@ -78,7 +79,7 @@ async function main(): Promise<void> {
     define: { __SERVICE__: JSON.stringify(config), __TEST_DELAY_MS__: String(delay) },
     logLevel: 'warning',
   })
-  for (const f of ['offscreen.html', 'options.html', 'options.css']) copyFileSync(join(root, 'src', f), join(out, f))
+  for (const f of ['offscreen.html', 'options.html', 'sidepanel.html', 'approve.html', 'welcome.html', 'ui.css']) copyFileSync(join(root, 'src', f), join(out, f))
   mkdirSync(join(out, 'models'))
   for (const f of MODEL_FILES) copyFileSync(join(root, 'models', f), join(out, 'models', f))
   mkdirSync(join(out, 'ort'))

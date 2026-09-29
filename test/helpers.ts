@@ -32,6 +32,7 @@ export interface Harness {
   settings: Settings
   deps: HandlerDeps
   loads: number
+  asked: string[]
   call(msg: unknown, sender?: string): Promise<any>
 }
 
@@ -43,10 +44,14 @@ export function harness(opts: { entities?: (texts: { id: string; text: string }[
     storage,
     settings,
     loads: 0,
+    asked: [],
     deps: {
       config: CONFIG,
       isApproved: (id) => settings.isApproved(id),
-      addPending: async (id) => void (await settings.addPending(id)),
+      isDenied: (id) => settings.isDenied(id),
+      addPending: (id, name) => settings.addPending(id, name),
+      askApproval: (id) => void h.asked.push(id),
+      userDictionary: () => settings.dictionary(),
       modelReady: async () => (opts.model ?? 'ready') === 'ready',
       startLoading: () => void h.loads++,
       recognize: async (texts) => {

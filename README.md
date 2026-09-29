@@ -3,7 +3,7 @@
 Chrome MV3「服務擴充功能」：在本機用 [CKIP](https://github.com/ckiplab/ckip-transformers) 中文 NER 模型＋使用者字典，把文字中的人名、地名、機構、日期等換成一致代號（例如 `〔人物A〕`）。其他擴充功能透過 **deid@1** 協定呼叫。
 
 - 完全在本機執行：不連網（CSP `connect-src 'self'`），不保存收到的文字，也不保存對照表。
-- 誰可以呼叫由使用者決定：第一次呼叫的擴充功能會列在設定頁的「待核准」，使用者按「允許」後才放行。
+- 兩種用法：自己在側邊欄貼文字去識別化、再把 AI 回覆還原；或讓其他擴充功能呼叫（第一次會跳出視窗請你允許）。
 - 擴充功能 ID：`fdchmnlidiijkhofoemcmpepibdnmgli`（由 `service.yaml` 的公鑰決定，未封裝載入也固定）。
 
 完整規格與決策紀錄見 [SPEC.md](SPEC.md)。
@@ -13,17 +13,44 @@ Chrome MV3「服務擴充功能」：在本機用 [CKIP](https://github.com/ckip
 1. 到 [Releases](https://github.com/yao-care/deid-ckip/releases/latest) 下載 `deid-ckip-<版本>.zip`（已含模型，約 19 MB），解壓縮到固定位置（之後不要刪除或移動）。
 2. 在 Chrome 網址列輸入 `chrome://extensions`，打開右上角「開發人員模式」。
 3. 按「載入未封裝項目」，選剛才解壓縮的資料夾。
-4. 看到「去識別化（CKIP）」、ID 為 `fdchmnlidiijkhofoemcmpepibdnmgli` 即完成。
 
 上架 Chrome 線上應用程式商店後，改為在商店直接安裝（見 SPEC 11.4）。
 
-### 第一次被其他擴充功能使用時
+## 使用流程
 
-1. 其他擴充功能（例如 research-evidence）第一次呼叫時，會先被擋下，並顯示「去識別化擴充功能沒有回應」。
-2. deid-ckip 的圖示會出現數字徽章。點圖示開啟設定頁，在「待核准」中確認是你信任的擴充功能（可到 `chrome://extensions` 比對 ID）後按「允許」。
-3. 回到原本的擴充功能按重試即可。之後可在設定頁隨時撤銷。
+### 1. 安裝後：歡迎頁
 
-設定頁也可以調整信心門檻，並貼一段文字測試替換結果（只在記憶體處理，不保存）。
+安裝完成會自動開啟歡迎頁，說明用法並載入模型；看到「可以使用」即完成。請按瀏覽器右上角的拼圖圖示，把「去識別化（CKIP）」釘選到工具列。
+
+<img src="docs/screenshots/1-welcome.png" width="600" alt="歡迎頁">
+
+### 2. 自己使用：側邊欄
+
+點工具列上的圖示，右側會打開側邊欄。切換到 ChatGPT 等 AI 的分頁時，側邊欄會繼續開著。
+
+1. 貼上要給 AI 的文字，按「去識別化」。
+2. 按「複製」，貼到 AI。模型不確定的地方會以黃色標出，請確認一下。
+3. 把 AI 的回覆貼回來，按「還原」，代號就會換回原本的名字。
+
+同一個人在這次使用中都用同一個代號。對照表只存在側邊欄，關閉即清除。
+
+<img src="docs/screenshots/3-sidepanel.png" width="320" alt="側邊欄">
+
+### 3. 讓其他擴充功能使用：核准視窗
+
+支援 deid@1 的擴充功能（例如 research-evidence）第一次呼叫時，會跳出視窗詢問。確認是你安裝的擴充功能後按「允許」，再回到該擴充功能按「重試」；之後它會自動使用，不再詢問。按「拒絕」則之後不再詢問，可在設定頁取消。
+
+<img src="docs/screenshots/2-approve.png" width="320" alt="核准視窗">
+
+### 4. 設定頁
+
+在側邊欄點「設定」開啟，可以：
+
+- **字典**：加入一定要替換的名稱（例如模型漏抓的醫院、常出現的人名），自己使用和其他擴充功能呼叫時都會套用。
+- **其他擴充功能**：查看等待核准、已允許、已拒絕的擴充功能，可以允許、撤銷或取消拒絕。
+- **信心門檻**：模型信心低於門檻的地方仍會替換，但會標出來請你確認。
+
+<img src="docs/screenshots/4-options.png" width="600" alt="設定頁">
 
 ## 給呼叫端開發者
 
@@ -68,7 +95,7 @@ pnpm build
 | `pnpm test` | 單元、契約、隱私（不連網、不存原文）測試；有 `models/` 時另跑 tokenizer 與 HF 的逐 token 比對 |
 | `pnpm test:model` | 加上實際模型推論（需要 `models/`，約 30 秒） |
 | `pnpm typecheck` | TypeScript 型別檢查 |
-| `pnpm e2e` | 在 Chromium 同時載入 `dist/deid-ckip` 與測試呼叫端（`test/e2e/caller/`），跑核准與去識別化流程（先 `pnpm build`，需 `pnpm exec playwright install chromium`） |
+| `pnpm e2e` | 在 Chromium 同時載入 `dist/deid-ckip` 與測試呼叫端（`test/e2e/caller/`），跑完整使用流程：安裝後歡迎頁、核准視窗、呼叫端去識別化、字典、側邊欄去識別化與還原（先 `pnpm build`，需 `pnpm exec playwright install chromium`）；加 `--shots` 會更新 `docs/screenshots/` |
 | `pnpm e2e:sw` | Service Worker 存活實測：延遲 150 秒的測試建置跑一次 deidentify（約 4 分鐘） |
 | `pnpm key` | 換金鑰時使用：由本機 `.keys/deid-ckip.pem` 算出公鑰與 ID，寫回 `service.yaml` |
 

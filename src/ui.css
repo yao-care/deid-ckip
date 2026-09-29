@@ -9,6 +9,7 @@
   --warn: #b45309;
   --error: #b91c1c;
   --ok: #15803d;
+  --mark: #fde68a;
   color-scheme: light;
 }
 
@@ -24,6 +25,7 @@
     --warn: #fbbf24;
     --error: #f87171;
     --ok: #4ade80;
+    --mark: #78350f;
     color-scheme: dark;
   }
 }
@@ -103,3 +105,36 @@ pre {
   padding: 12px;
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* 共用元件（側邊欄、核准視窗、歡迎頁） */
+.panel main { padding: 16px 12px 32px; }
+.panel section { padding: 12px 14px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.topbar h1 { font-size: 17px; margin: 0; }
+.banner {
+  border: 1px solid var(--warn);
+  color: var(--text);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 12px;
+}
+.output {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  min-height: 3em;
+}
+mark { background: var(--mark); color: var(--text); border-radius: 3px; padding: 0 1px; }
+.map { width: 100%; border-collapse: collapse; font-size: 14px; }
+.map td { padding: 3px 6px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.steps { padding-left: 1.4em; margin: 0; }
+.steps li { margin: 4px 0; }
+.big { font-size: 16px; padding: 8px 20px; }
+.center { text-align: center; }
+a { color: var(--accent); }
+.lead { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+.panel h1 { font-size: 19px; margin: 0 0 12px; }

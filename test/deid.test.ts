@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codeFor, codeLetter, deidentify, protectedSpans, type DeidInput } from '../src/deid.ts'
+import { codeFor, codeLetter, deidentify, protectedSpans, restore, type DeidInput } from '../src/deid.ts'
 import type { Entity } from '../src/ner.ts'
 
 const STYLE = '〔{role}{letter}〕'
@@ -157,5 +157,26 @@ describe('deidentify', () => {
       entities: { '0:0': ents(a, [['王小', 'PERSON', 0.6]]), '0:1': [] },
     })
     expect(r.texts.map((t) => t.text)).toEqual(['今天看診的是〔人物A〕', '明，情況穩定'])
+  })
+})
+
+describe('restore（側邊欄還原）', () => {
+  it('代號換回原文，長代號優先', () => {
+    const m = { 王小明: '〔人物A〕', 陳美華: '〔人物AA〕', 台中: '〔地點A〕' }
+    expect(restore('〔人物A〕和〔人物AA〕在〔地點A〕，〔人物A〕先離開', m)).toBe('王小明和陳美華在台中，王小明先離開')
+  })
+
+  it('去識別化後再還原，得到原文', () => {
+    const text = '王小明住在台中'
+    const r = deidentify({
+      texts: [{ id: 'a', text }],
+      entities: { a: [{ start: 0, end: 3, type: 'PERSON', score: 0.9 }, { start: 5, end: 7, type: 'GPE', score: 0.9 }] },
+      entityTypes: ['PERSON', 'GPE'],
+      dictionary: [],
+      existingMapping: {},
+      pseudonymStyle: '〔{role}{letter}〕',
+      threshold: 0.7,
+    })
+    expect(restore(r.texts[0]!.text, r.mapping)).toBe(text)
   })
 })

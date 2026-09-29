@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>歡迎使用去識別化（CKIP）</title>
+    <link rel="stylesheet" href="ui.css" />
+    <script type="module" src="welcome.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>去識別化（CKIP）安裝完成</h1>
+        <p class="muted">在你的電腦上把文字裡的人名、地名、機構、日期換成〔人物A〕這類代號，再交給 AI。文字不會離開你的電腦，也不會被保存。</p>
+      </header>
+
+      <section>
+        <h2 id="model-title">模型準備中</h2>
+        <p>第一次使用需要把中文辨識模型載入記憶體，約需數秒。</p>
+        <p>狀態：<span id="model-state" class="pill"></span></p>
+        <p id="model-error" class="error" hidden></p>
+      </section>
+
+      <section>
+        <h2>自己使用</h2>
+        <ol class="steps">
+          <li>按瀏覽器右上角的拼圖圖示，把「去識別化（CKIP）」<strong>釘選</strong>到工具列。</li>
+          <li>點它，右側會打開側邊欄。</li>
+          <li>貼上要給 AI 的文字 → 按「去識別化」→ 按「複製」，貼到 ChatGPT 等 AI。</li>
+          <li>把 AI 的回覆貼回側邊欄 → 按「還原」，代號就會換回原本的名字。</li>
+        </ol>
+        <p class="muted">對照表只存在側邊欄，關閉即清除。模型漏掉的名稱可以到<a href="options.html">設定頁</a>加入字典。</p>
+      </section>
+
+      <section>
+        <h2>讓其他擴充功能使用</h2>
+        <ol class="steps">
+          <li>支援去識別化的擴充功能（例如 research-evidence）第一次使用時，會跳出一個小視窗問你是否允許。</li>
+          <li>確認是你安裝的擴充功能後按「允許」，再回到該擴充功能按「重試」。</li>
+          <li>之後它會自動使用，不再詢問。可隨時在<a href="options.html">設定頁</a>撤銷。</li>
+        </ol>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 // 端對端：在 Chromium 同時載入 dist/deid-ckip 與測試呼叫端（test/e2e/caller/）。
-//   pnpm e2e        核准流程＋去識別化（先 pnpm build）
+//   pnpm e2e        安裝→歡迎頁、核准視窗、呼叫端去識別化、字典、側邊欄去識別化與還原（先 pnpm build）
+//   pnpm e2e --shots 同上，並把各畫面截圖存到 docs/screenshots/
 //   pnpm e2e:sw     Service Worker 存活實測（SPEC 5.3）：以延遲 150 秒的測試建置跑一次 deidentify
 // 每一步都有逾時，整體上限見 LIMIT_MS。
 
@@ -47,13 +48,18 @@ const request = (texts: { id: string; text: string }[], existing: Record<string,
   pseudonym_style: '〔{role}{letter}〕',
 })
 
-async function approve(ctx: BrowserContext, callerExtId: string): Promise<void> {
-  const opt = await ctx.newPage()
-  await opt.goto(`chrome-extension://${ID}/options.html`)
-  const row = opt.locator('#pending li', { hasText: callerExtId })
-  await row.getByRole('button', { name: '允許' }).click({ timeout: 10_000 })
-  await opt.locator('#approved li', { hasText: callerExtId }).waitFor({ timeout: 5_000 })
-  await opt.close()
+/** 其他擴充功能第一次呼叫時跳出的核准視窗，按「允許」。 */
+async function approveInPopup(popup: Page): Promise<void> {
+  await popup.waitForLoadState()
+  await popup.setViewportSize({ width: 440, height: 520 })
+  await shot(popup, '2-approve')
+  await popup.getByRole('button', { name: '允許' }).click({ timeout: 10_000 })
+  await popup.getByText('已允許').waitFor({ timeout: 5_000 })
+}
+
+const shots = join(root, 'docs', 'screenshots')
+async function shot(page: Page, name: string): Promise<void> {
+  if (process.argv.includes('--shots')) await page.screenshot({ path: join(shots, `${name}.png`), fullPage: true })
 }
 
 async function waitReady(page: Page): Promise<void> {
@@ -79,19 +85,31 @@ async function main(): Promise<void> {
     args: [`--disable-extensions-except=${dist},${caller}`, `--load-extension=${dist},${caller}`],
   })
   try {
+    const welcome = ctx.pages().find((p) => p.url().endsWith('/welcome.html')) ?? (await ctx.waitForEvent('page', { predicate: (p) => p.url().endsWith('/welcome.html'), timeout: 10_000 }))
+    check(welcome, '第一次安裝自動開啟歡迎頁')
+    await welcome.getByText('可以使用').waitFor({ timeout: 60_000 }).catch(async (e: unknown) => {
+      throw new Error(`歡迎頁模型狀態：${await welcome.locator('#model-state').textContent()}；${await welcome.locator('#model-error').textContent()}（${e}）`)
+    })
+    check(true, '歡迎頁顯示模型「可以使用」')
+    await welcome.setViewportSize({ width: 900, height: 900 })
+    await shot(welcome, '1-welcome')
+
     const cid = await callerId(ctx)
     const page = await ctx.newPage()
     await page.goto(`chrome-extension://${cid}/caller.html`)
 
-    let r = await call(page, { type: 'ping' }, 3000)
+    const popupPromise = ctx.waitForEvent('page', { predicate: (p) => p.url().includes('/approve.html'), timeout: 10_000 })
+    let r = await call(page, { type: 'ping', caller_name: 'deid-ckip 測試呼叫端' }, 3000)
     check(r.data?.ok && r.data.ready === false && r.data.approved === false, '未核准：ping 在 3 秒內回 ready: false、approved: false')
+    const popup = await popupPromise
+    check(popup.url().includes(`id=${cid}`), '第一次呼叫自動跳出核准視窗')
     r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
-    check(r.data?.code === 'NOT_APPROVED', '未核准：deidentify 回 NOT_APPROVED')
+    check(r.data?.code === 'NOT_APPROVED', '核准前 deidentify 回 NOT_APPROVED')
 
-    await approve(ctx, cid)
-    check(true, '設定頁核准呼叫端')
+    await approveInPopup(popup)
+    check(true, '在核准視窗按「允許」')
     await waitReady(page)
-    check(true, 'ping 回 ready: true（模型在 offscreen 載入完成）')
+    check(true, '重試後 ping 回 ready: true')
 
     if (swMode) {
       // 模型已就緒後閒置 40 秒，讓 Service Worker 有機會進入閒置回收，再送出會延遲 150 秒的請求
@@ -117,6 +135,32 @@ async function main(): Promise<void> {
 
     r = await call(page, request([{ id: '0:0', text: 'x'.repeat(20001) }]), 10_000)
     check(r.data?.code === 'TOO_LARGE', '超過上限回 TOO_LARGE')
+
+    // 設定頁：加入字典（補模型漏抓的「成大醫院」）
+    const opt = await ctx.newPage()
+    await opt.setViewportSize({ width: 900, height: 900 })
+    await opt.goto(`chrome-extension://${ID}/options.html`)
+    await opt.locator('#dict-term').fill('成大醫院')
+    await opt.locator('#dict-form button[type=submit]').click()
+    await opt.locator('#dictionary li', { hasText: '成大醫院' }).waitFor({ timeout: 5_000 })
+    check(true, '設定頁加入字典詞「成大醫院」')
+    await shot(opt, '4-options')
+
+    // 側邊欄：人自己使用（以分頁開啟同一頁面）
+    const panel = await ctx.newPage()
+    await panel.setViewportSize({ width: 420, height: 1000 })
+    await panel.goto(`chrome-extension://${ID}/sidepanel.html`)
+    await panel.locator('#source').fill('王小明於2023年3月5日在台中榮民總醫院就診，之後轉到成大醫院追蹤。')
+    await panel.getByRole('button', { name: '去識別化' }).click()
+    await panel.locator('#result-section').waitFor({ state: 'visible', timeout: 60_000 })
+    const deided = (await panel.locator('#result').textContent()) ?? ''
+    console.log(`  ${deided}`)
+    for (const s of ['王小明', '台中榮民總醫院', '成大醫院']) check(!deided.includes(s), `側邊欄：「${s}」已被替換`)
+    const person = deided.match(/〔人物[A-Z]+〕/)?.[0] ?? ''
+    await panel.locator('#reply').fill(`建議${person}三個月後回診。`)
+    await panel.getByRole('button', { name: '還原' }).click()
+    check((await panel.locator('#restored').textContent()) === '建議王小明三個月後回診。', '側邊欄：AI 回覆中的代號還原成原文')
+    await shot(panel, '3-sidepanel')
   } finally {
     await ctx.close()
     rmSync(userDir, { recursive: true, force: true })

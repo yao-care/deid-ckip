@@ -9,6 +9,8 @@ import { Settings } from './settings.ts'
 const config = __SERVICE__
 const settings = new Settings(chrome.storage.local)
 const OFFSCREEN_URL = 'offscreen.html'
+// 側邊欄使用的代號格式，與 deid@1 呼叫端相同
+const PSEUDONYM_STYLE = '〔{role}{letter}〕'
 
 let creating: Promise<void> | undefined
 
@@ -21,6 +23,8 @@ async function hasOffscreen(): Promise<boolean> {
 }
 
 async function ensureOffscreen(): Promise<void> {
+  // 建立中的文件已出現在 getContexts，但腳本可能還沒註冊訊息處理；先等建立完成
+  if (creating) return creating
   if (await hasOffscreen()) return
   creating ??= chrome.offscreen
     .createDocument({ url: OFFSCREEN_URL, reasons: [chrome.offscreen.Reason.WORKERS], justification: '在本機執行去識別化模型' })
@@ -34,8 +38,10 @@ function toOffscreen<T>(msg: Record<string, unknown>): Promise<T> {
 
 async function modelStatus(): Promise<{ state: ModelState; error?: string }> {
   if (!(await hasOffscreen())) return { state: 'idle' }
+  if (creating) return { state: 'loading' }
   return Promise.race([
-    toOffscreen<{ state: ModelState; error?: string }>({ type: 'status' }),
+    // offscreen 腳本尚未就緒時 sendMessage 會失敗，視為載入中
+    toOffscreen<{ state: ModelState; error?: string }>({ type: 'status' }).catch(() => ({ state: 'loading' as const })),
     new Promise<{ state: ModelState }>((r) => setTimeout(() => r({ state: 'loading' }), 1000)),
   ])
 }
@@ -48,10 +54,35 @@ async function recognizeTexts(texts: { id: string; text: string }[]): Promise<Re
   throw new Error(res.error)
 }
 
+// 核准視窗：每個呼叫者同時最多一個，關掉後至少隔 30 秒才會因為再次呼叫而重新跳出
+const approvalWindows = new Map<string, number>()
+const lastAsked = new Map<string, number>()
+const ASK_INTERVAL_MS = 30_000
+
+async function askApproval(id: string): Promise<void> {
+  const open = approvalWindows.get(id)
+  if (open !== undefined) {
+    const alive = await chrome.windows.get(open).then(() => true, () => false)
+    if (alive) return void chrome.windows.update(open, { focused: true })
+    approvalWindows.delete(id)
+  }
+  if (Date.now() - (lastAsked.get(id) ?? 0) < ASK_INTERVAL_MS) return
+  lastAsked.set(id, Date.now())
+  const w = await chrome.windows.create({ url: `approve.html?id=${id}`, type: 'popup', width: 440, height: 520, focused: true })
+  if (w?.id !== undefined) approvalWindows.set(id, w.id)
+}
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  for (const [id, w] of approvalWindows) if (w === windowId) approvalWindows.delete(id)
+})
+
 const deps: HandlerDeps = {
   config,
   isApproved: (id) => settings.isApproved(id),
-  addPending: async (id) => void (await settings.addPending(id)),
+  isDenied: (id) => settings.isDenied(id),
+  addPending: (id, name) => settings.addPending(id, name),
+  askApproval: (id) => void askApproval(id).catch(() => {}),
+  userDictionary: () => settings.dictionary(),
   modelReady: async () => (await modelStatus()).state === 'ready',
   startLoading: () => void ensureOffscreen().catch(() => {}),
   recognize: recognizeTexts,
@@ -65,7 +96,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   return true
 })
 
-// 設定頁的內部訊息
+// 本擴充功能自己的頁面（側邊欄、歡迎頁、設定頁、核准視窗）送來的內部訊息
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || msg?.target !== 'background') return
   if (msg.type === 'keepalive') {
@@ -80,18 +111,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     ensureOffscreen().then(() => sendResponse({ ok: true }), (e: unknown) => sendResponse({ error: String(e) }))
     return true
   }
-  if (msg.type === 'test') {
-    // 僅在記憶體處理，結果回給設定頁，不保存
+  if (msg.type === 'deidentify') {
+    // 側邊欄：人自己使用。只在記憶體處理，對照表由側邊欄保管（關閉即清除），這裡不保存
     ;(async () => {
-      const texts = [{ id: 'test', text: String(msg.text ?? '') }]
+      const texts = [{ id: 'panel', text: String(msg.text ?? '') }]
+      if (texts[0]!.text.length > config.max_chars_per_request) throw new Error(`文字超過 ${config.max_chars_per_request} 字，請分段處理`)
       const entities = await recognizeTexts(texts)
       return deidentify({
         texts,
         entities,
         entityTypes: config.entity_types,
-        dictionary: [],
-        existingMapping: {},
-        pseudonymStyle: '〔{role}{letter}〕',
+        dictionary: await settings.dictionary(),
+        existingMapping: (msg.mapping ?? {}) as Record<string, string>,
+        pseudonymStyle: PSEUDONYM_STYLE,
         threshold: await settings.threshold(),
       })
     })().then(sendResponse, (e: unknown) => sendResponse({ error: e instanceof Error ? e.message : String(e) }))
@@ -106,9 +138,20 @@ async function updateBadge(): Promise<void> {
   if (n) await chrome.action.setBadgeBackgroundColor({ color: '#b45309' })
 }
 
+async function setup(): Promise<void> {
+  await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  await updateBadge()
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.pending_callers) void updateBadge()
 })
-chrome.runtime.onStartup.addListener(() => void updateBadge())
-chrome.runtime.onInstalled.addListener(() => void updateBadge())
-chrome.action.onClicked.addListener(() => void chrome.runtime.openOptionsPage())
+chrome.runtime.onStartup.addListener(() => void setup())
+chrome.runtime.onInstalled.addListener((details) => {
+  void setup()
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+    // 第一次安裝：開歡迎頁，並立即開始載入模型
+    void chrome.tabs.create({ url: 'welcome.html' })
+    void ensureOffscreen().catch(() => {})
+  }
+})

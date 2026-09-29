@@ -47,9 +47,9 @@ describe('靜態檢查：src/', () => {
 describe('manifest', () => {
   const m = manifestOf(readService(ROOT)) as Record<string, any>
 
-  it('不宣告 host_permissions，權限只有 offscreen 與 storage', () => {
+  it('不宣告 host_permissions，權限只有 offscreen、storage、sidePanel（都不會跳出權限警告）', () => {
     expect(m.host_permissions).toBeUndefined()
-    expect(m.permissions).toEqual(['offscreen', 'storage'])
+    expect(m.permissions).toEqual(['offscreen', 'storage', 'sidePanel'])
   })
 
   it('externally_connectable 只開放擴充功能，不開放網頁', () => {
@@ -86,6 +86,8 @@ describe('執行期：處理請求後，儲存內容不含任何收到的文字'
     const r = await h.call(request, OTHER)
     expect(r.texts[0].text).not.toContain('王小明')
     await h.settings.setThreshold(0.8)
+    await h.settings.addTerm('使用者自己加的詞', 'ORG')
+    await h.settings.reject('ponmlkjihgfedcbaponmlkjihgfedcbb')
 
     const keys = new Set(h.storage.writes.flatMap((w) => Object.keys(w)))
     for (const k of keys) expect(STORAGE_KEYS).toContain(k)

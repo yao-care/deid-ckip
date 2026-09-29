@@ -26,7 +26,13 @@ export class ModelNotReadyError extends Error {}
 export interface HandlerDeps {
   config: ServiceConfig
   isApproved(id: string): Promise<boolean>
-  addPending(id: string): Promise<void>
+  isDenied(id: string): Promise<boolean>
+  /** 記入待核准；回傳是否為第一次出現。 */
+  addPending(id: string, name?: string): Promise<boolean>
+  /** 未核准、未拒絕的呼叫者：請使用者核准（開啟核准視窗；重複跳出的節流由實作負責）。 */
+  askApproval(id: string): void
+  /** 使用者在設定頁建立的字典，與呼叫端送來的字典合併（呼叫端優先）。 */
+  userDictionary(): Promise<{ term: string; type: string }[]>
   /** 模型是否已就緒（不可等待，ping 要在 3 秒內回覆）。 */
   modelReady(): Promise<boolean>
   /** 開始載入模型（不等待）。 */
@@ -38,14 +44,20 @@ export interface HandlerDeps {
 
 const err = (code: ErrorCode, error: string): ErrorResponse => ({ error, code })
 
-export const NOT_APPROVED_MESSAGE = '此擴充功能尚未獲准使用去識別化服務，請到 deid-ckip 設定頁核准後重試'
+export const NOT_APPROVED_MESSAGE = '此擴充功能尚未獲准使用去識別化服務，請在跳出的 deid-ckip 視窗按「允許」後重試'
+export const DENIED_MESSAGE = '使用者已拒絕此擴充功能使用去識別化服務，可到 deid-ckip 設定頁取消拒絕'
 
 export async function handleExternal(msg: unknown, senderId: string | undefined, deps: HandlerDeps): Promise<unknown> {
   if (!senderId || !EXTENSION_ID_RE.test(senderId)) return err('INVALID', '不允許的呼叫者')
   if (!isObject(msg) || typeof msg.type !== 'string') return err('INVALID', '訊息格式不正確')
   const { config } = deps
   const approved = await deps.isApproved(senderId)
-  if (!approved) await deps.addPending(senderId)
+  const denied = !approved && (await deps.isDenied(senderId))
+  if (!approved && !denied) {
+    const name = typeof msg.caller_name === 'string' ? msg.caller_name : undefined
+    await deps.addPending(senderId, name)
+    deps.askApproval(senderId)
+  }
 
   switch (msg.type) {
     case 'ping': {
@@ -57,7 +69,7 @@ export async function handleExternal(msg: unknown, senderId: string | undefined,
     case 'capabilities':
       return { entity_types: config.entity_types, max_chars_per_request: config.max_chars_per_request }
     case 'deidentify': {
-      if (!approved) return err('NOT_APPROVED', NOT_APPROVED_MESSAGE)
+      if (!approved) return err('NOT_APPROVED', denied ? DENIED_MESSAGE : NOT_APPROVED_MESSAGE)
       const req = validateDeidentify(msg)
       if (typeof req === 'string') return err('INVALID', req)
       const tooLong = req.texts.find((t) => t.text.length > config.max_chars_per_request)
@@ -72,11 +84,13 @@ export async function handleExternal(msg: unknown, senderId: string | undefined,
           throw e
         }
       }
+      const own = new Set(req.dictionary.map((d) => d.term))
+      const dictionary = [...req.dictionary, ...(await deps.userDictionary()).filter((d) => !own.has(d.term))]
       const out = deidentify({
         texts: req.texts,
         entities,
         entityTypes: modelTypes,
-        dictionary: req.dictionary,
+        dictionary,
         existingMapping: req.existing_mapping,
         pseudonymStyle: req.pseudonym_style,
         threshold: await deps.threshold(),

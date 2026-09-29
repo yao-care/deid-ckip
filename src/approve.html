@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>允許使用去識別化？</title>
+    <link rel="stylesheet" href="ui.css" />
+    <script type="module" src="approve.js"></script>
+  </head>
+  <body class="panel">
+    <main>
+      <h1>允許這個擴充功能使用去識別化嗎？</h1>
+      <section>
+        <p id="who" class="lead"></p>
+        <dl class="grid">
+          <dt>擴充功能 ID</dt><dd><code id="caller-id"></code></dd>
+        </dl>
+        <p class="muted">允許後，它送來的文字會在你的電腦上把人名、地名、機構、日期換成代號再交回去。文字不會離開你的電腦，也不會被保存。</p>
+        <p class="muted">不確定是哪個擴充功能？到 <code>chrome://extensions</code> 找這個 ID。</p>
+      </section>
+      <div class="row">
+        <button id="allow" type="button" class="big">允許</button>
+        <button id="deny" type="button" class="big secondary">拒絕</button>
+      </div>
+      <p id="done" class="muted" hidden></p>
+    </main>
+  </body>
+</html>

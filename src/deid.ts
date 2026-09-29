@@ -173,3 +173,13 @@ function typeFromCode(code: string, style: string): string {
 }
 
 const round = (x: number) => Math.round(x * 1000) / 1000
+
+/** 還原：把文字中的代號換回原文（長代號優先，避免〔人物A〕先吃掉〔人物AA〕的前綴）。 */
+export function restore(text: string, mapping: Mapping): string {
+  const back = Object.entries(mapping)
+    .map(([original, code]) => ({ code, original }))
+    .sort((a, b) => b.code.length - a.code.length)
+  let out = text
+  for (const { code, original } of back) out = out.split(code).join(original)
+  return out
+}

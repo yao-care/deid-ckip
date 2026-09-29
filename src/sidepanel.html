@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>去識別化（CKIP）</title>
+    <link rel="stylesheet" href="ui.css" />
+    <script type="module" src="sidepanel.js"></script>
+  </head>
+  <body class="panel">
+    <main>
+      <div class="topbar">
+        <h1>去識別化</h1>
+        <span><span id="model-state" class="pill"></span> <a href="options.html" target="_blank" title="設定">設定</a></span>
+      </div>
+      <p id="model-error" class="error" hidden></p>
+      <div id="pending-banner" class="banner" hidden></div>
+
+      <section>
+        <h2>1. 貼上要給 AI 的文字</h2>
+        <textarea id="source" rows="7" placeholder="例如：王小明於 2023 年 3 月 5 日在台中榮民總醫院就診。"></textarea>
+        <div class="row">
+          <button id="deid" type="button">去識別化</button>
+          <span id="deid-note" class="muted"></span>
+        </div>
+      </section>
+
+      <section id="result-section" hidden>
+        <h2>2. 複製去識別化的文字給 AI</h2>
+        <p id="low-note" class="muted" hidden><mark>黃色標記</mark>是模型不確定的地方，請確認是否需要替換；漏掉的可以到設定頁加入字典。</p>
+        <div id="result" class="output"></div>
+        <div class="row"><button id="copy-result" type="button">複製</button><span id="copied-result" class="muted" hidden>已複製</span></div>
+      </section>
+
+      <section id="restore-section" hidden>
+        <h2>3. 貼上 AI 的回覆，換回原文</h2>
+        <textarea id="reply" rows="6" placeholder="把 AI 回覆中含〔人物A〕等代號的文字貼在這裡"></textarea>
+        <div class="row"><button id="restore" type="button">還原</button></div>
+        <div id="restored" class="output" hidden></div>
+        <div class="row"><button id="copy-restored" type="button" hidden>複製</button><span id="copied-restored" class="muted" hidden>已複製</span></div>
+      </section>
+
+      <section id="mapping-section" hidden>
+        <h2>對照表</h2>
+        <p class="muted">同一個人、地點在這次使用中都用同一個代號。只存在這個側邊欄，關閉後即清除。</p>
+        <table class="map"><tbody id="mapping"></tbody></table>
+        <div class="row"><button id="clear" type="button" class="secondary">清除，重新開始</button></div>
+      </section>
+    </main>
+  </body>
+</html>
