@@ -1,0 +1,19 @@
+id: deid-ckip
+name: 去識別化（CKIP）
+description: 在本機用 CKIP 中文 NER 模型把人名、地名、機構、日期等換成一致代號，供其他擴充功能透過 deid@1 協定呼叫。
+version: 0.1.0
+protocol: deid@1
+license: GPL-3.0
+
+extension:
+  id: fdchmnlidiijkhofoemcmpepibdnmgli
+  key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy6nlJsHL7436luHs3xPjSik4dUprp4GvJYsbu5Os57Cb3IlPnhPx/XIpyRtnzcQaYcVcsDkjFW0sZ3bpUL6deupvzm6h0DERyB8poiUyRsEzyEefu2jR375NRV2RJMaeKQa7ZxxOn0H32q/AKQ8RMfc89LPqVG0BhdNX30armpEIRN9pgVDn81vSfyVbjw0fGr6Wk2GzUASwkaBEQ7JUT1+ZYFWrfRZOa9L211ZaYeN0a1RKYgtnxGJghDHGj0s2smUlYY/vKJ8hwxkeS6G4xzSfcKa3FF09pGQMVGeb5l0VQp0nCogGLWNajZFXCV/FfreU/ym+WuK7njLgxd65JwIDAQAB
+
+model:
+  source: ckiplab/albert-tiny-chinese-ner
+  format: onnx
+  quantize: none            # int8 實測標籤一致率僅 88.5%，見 scripts/convert-model.py
+  tokenizer: bert-base-chinese
+
+entity_types: [PERSON, GPE, LOC, ORG, FAC, NORP, DATE, TIME]
+max_chars_per_request: 20000

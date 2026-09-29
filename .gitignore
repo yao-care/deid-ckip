@@ -1,0 +1,10 @@
+node_modules/
+dist/
+models/
+.keys/
+*.log
+.DS_Store
+.claude/settings.local.json
+.venv/
+__pycache__/
+test-results/

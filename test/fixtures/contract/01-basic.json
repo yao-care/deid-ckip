@@ -1,0 +1,20 @@
+{
+  "description": "基本替換：多段、id 與 request_id 原樣回傳、完整對照表、依類型計數",
+  "entities": { "0:0": [["王小明", "PERSON"], ["台中", "GPE"]], "0:1": [["台中榮民總醫院", "FAC"]] },
+  "request": {
+    "type": "deidentify",
+    "request_id": "r_1759100000000",
+    "texts": [{ "id": "0:0", "text": "王小明住在台中。" }, { "id": "0:1", "text": "今天到台中榮民總醫院回診。" }, { "id": "3:0", "text": "沒有個資。" }],
+    "entity_types": ["PERSON", "GPE", "LOC", "ORG", "FAC", "NORP", "DATE", "TIME"],
+    "dictionary": [],
+    "existing_mapping": {},
+    "pseudonym_style": "〔{role}{letter}〕"
+  },
+  "response": {
+    "request_id": "r_1759100000000",
+    "texts": [{ "id": "0:0", "text": "〔人物A〕住在〔地點A〕。" }, { "id": "0:1", "text": "今天到〔設施A〕回診。" }, { "id": "3:0", "text": "沒有個資。" }],
+    "mapping": { "王小明": "〔人物A〕", "台中": "〔地點A〕", "台中榮民總醫院": "〔設施A〕" },
+    "counts": { "PERSON": 1, "GPE": 1, "FAC": 1 },
+    "low_confidence": []
+  }
+}

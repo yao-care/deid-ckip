@@ -1,0 +1,20 @@
+{
+  "description": "低信心實體仍替換，位置為回傳文字中代號的位置（UTF-16 索引）",
+  "entities": { "0:0": [["王小明", "PERSON", 0.95], ["陳美華", "PERSON", 0.52]] },
+  "request": {
+    "type": "deidentify",
+    "request_id": "r_4",
+    "texts": [{ "id": "0:0", "text": "今天王小明和陳美華來了。" }],
+    "entity_types": ["PERSON", "GPE", "LOC", "ORG", "FAC", "NORP", "DATE", "TIME"],
+    "dictionary": [],
+    "existing_mapping": {},
+    "pseudonym_style": "〔{role}{letter}〕"
+  },
+  "response": {
+    "request_id": "r_4",
+    "texts": [{ "id": "0:0", "text": "今天〔人物A〕和〔人物B〕來了。" }],
+    "mapping": { "王小明": "〔人物A〕", "陳美華": "〔人物B〕" },
+    "counts": { "PERSON": 2 },
+    "low_confidence": [{ "id": "0:0", "start": 8, "end": 13, "type": "PERSON", "score": 0.52 }]
+  }
+}

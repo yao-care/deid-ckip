@@ -1,0 +1,9 @@
+{
+  "source": "ckiplab/albert-tiny-chinese-ner",
+  "tokenizer": "bert-base-chinese",
+  "files": {
+    "model.onnx": "4a7b58cc07f5bfc255c9f65433210f12103a6913a32a31f12f467a62c625dbbe",
+    "vocab.txt": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c",
+    "config.json": "5c78df0ddfd25630bba2c8aa202ce796fe4f27f9de2d40f95474ccfc7db9795f"
+  }
+}

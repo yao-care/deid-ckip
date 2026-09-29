@@ -1,0 +1,14 @@
+{
+  "description": "錯誤格式：TOO_LARGE（任一段超過 max_chars_per_request）",
+  "entities": {},
+  "request": {
+    "type": "deidentify",
+    "request_id": "r_5",
+    "texts": [{ "id": "0:0", "text": "短" }, { "id": "0:1", "text": "__REPEAT_x_20001__" }],
+    "entity_types": ["PERSON"],
+    "dictionary": [],
+    "existing_mapping": {},
+    "pseudonym_style": "〔{role}{letter}〕"
+  },
+  "response": { "error": "第 0:1 段有 20001 字，超過上限 20000", "code": "TOO_LARGE" }
+}

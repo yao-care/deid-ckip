@@ -1,0 +1,7 @@
+# Python 3.12；torch 2.2.2 是 Intel Mac 可用的最後版本，其餘版本配合它
+torch==2.2.2
+transformers==4.46.3
+numpy<2
+onnx==1.17.0
+onnxruntime==1.20.1
+pyyaml==6.0.2

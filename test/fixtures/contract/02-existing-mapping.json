@@ -1,0 +1,20 @@
+{
+  "description": "與基本規則共存：既有代號保留、既有對照不變、同 role 字母接續",
+  "entities": { "0:0": [["王小明", "PERSON"], ["陳美華", "PERSON"]] },
+  "request": {
+    "type": "deidentify",
+    "request_id": "r_2",
+    "texts": [{ "id": "0:0", "text": "王小明的手機是〔手機A〕，陳美華的 Email 是〔EmailA〕。" }],
+    "entity_types": ["PERSON", "GPE", "LOC", "ORG", "FAC", "NORP", "DATE", "TIME"],
+    "dictionary": [],
+    "existing_mapping": { "0912-345-678": "〔手機A〕", "wang@example.com": "〔EmailA〕", "王小明": "〔人物A〕" },
+    "pseudonym_style": "〔{role}{letter}〕"
+  },
+  "response": {
+    "request_id": "r_2",
+    "texts": [{ "id": "0:0", "text": "〔人物A〕的手機是〔手機A〕，〔人物B〕的 Email 是〔EmailA〕。" }],
+    "mapping": { "0912-345-678": "〔手機A〕", "wang@example.com": "〔EmailA〕", "王小明": "〔人物A〕", "陳美華": "〔人物B〕" },
+    "counts": { "PERSON": 2 },
+    "low_confidence": []
+  }
+}

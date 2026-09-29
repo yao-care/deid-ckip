@@ -1,0 +1,20 @@
+{
+  "description": "字典優先於模型、長詞優先、自訂類型當 role",
+  "entities": { "0:0": [["林醫師", "PERSON", 0.55], ["阿土伯", "PERSON"]] },
+  "request": {
+    "type": "deidentify",
+    "request_id": "r_3",
+    "texts": [{ "id": "0:0", "text": "林醫師與林醫師娘討論病人阿土伯的狀況。" }],
+    "entity_types": ["PERSON", "GPE", "LOC", "ORG", "FAC", "NORP", "DATE", "TIME"],
+    "dictionary": [{ "term": "林醫師", "type": "PERSON" }, { "term": "林醫師娘", "type": "PERSON" }, { "term": "阿土伯", "type": "病人" }],
+    "existing_mapping": {},
+    "pseudonym_style": "〔{role}{letter}〕"
+  },
+  "response": {
+    "request_id": "r_3",
+    "texts": [{ "id": "0:0", "text": "〔人物A〕與〔人物B〕討論病人〔病人A〕的狀況。" }],
+    "mapping": { "林醫師": "〔人物A〕", "林醫師娘": "〔人物B〕", "阿土伯": "〔病人A〕" },
+    "counts": { "PERSON": 2, "病人": 1 },
+    "low_confidence": []
+  }
+}
