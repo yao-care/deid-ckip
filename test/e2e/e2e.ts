@@ -14,7 +14,7 @@ const root = join(import.meta.dirname, '..', '..')
 const svc = readService(root)
 const swMode = process.argv.includes('--sw')
 const DELAY_MS = 150_000
-const LIMIT_MS = swMode ? 300_000 : 180_000
+const LIMIT_MS = swMode ? 300_000 : 240_000
 const dist = join(root, 'dist', swMode ? `${svc.id}-test` : svc.id)
 const caller = join(root, 'test', 'e2e', 'caller')
 const ID = svc.extension.id
@@ -62,6 +62,8 @@ async function shot(page: Page, name: string): Promise<void> {
   if (process.argv.includes('--shots')) await page.screenshot({ path: join(shots, `${name}.png`), fullPage: true })
 }
 
+const approvePages = (ctx: BrowserContext) => ctx.pages().filter((p) => p.url().includes('/approve.html'))
+
 async function waitReady(page: Page): Promise<void> {
   const until = Date.now() + 60_000
   while (Date.now() < until) {
@@ -105,9 +107,11 @@ async function main(): Promise<void> {
     check(popup.url().includes(`id=${cid}`), '第一次呼叫自動跳出核准視窗')
     r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
     check(r.data?.code === 'NOT_APPROVED', '核准前 deidentify 回 NOT_APPROVED')
+    // 核准視窗是否已開，每次都向 Chrome 查詢（不靠 Service Worker 記憶體），所以這項也涵蓋 SW 被回收後再呼叫的情況。
+    // headless 下無法強制停止擴充功能 SW（CDP stopAllWorkers／closeTarget、serviceworker-internals 均無效，2026-09-29 實測）。
     await call(page, { type: 'ping' }, 3000)
     await page.waitForTimeout(1500)
-    check(ctx.pages().filter((p) => p.url().includes('/approve.html')).length === 1, '同一個呼叫端重複呼叫，只會有一個核准視窗')
+    check(approvePages(ctx).length === 1, '同一個呼叫端重複呼叫，只會有一個核准視窗')
 
     await approveInPopup(popup)
     check(true, '在核准視窗按「允許」')
@@ -164,6 +168,71 @@ async function main(): Promise<void> {
     await panel.getByRole('button', { name: '還原' }).click()
     check((await panel.locator('#restored').textContent()) === '建議王小明三個月後回診。', '側邊欄：AI 回覆中的代號還原成原文')
     await shot(panel, '3-sidepanel')
+
+    // 側邊欄：已有對照表時修改字典 → 提示
+    await opt.locator('#dict-term').fill('阿土伯')
+    await opt.locator('#dict-type').selectOption('__custom')
+    await opt.locator('#dict-custom').fill('病人')
+    await opt.locator('#dict-form button[type=submit]').click()
+    await panel.locator('#dict-banner').waitFor({ state: 'visible', timeout: 5_000 })
+    check(true, '側邊欄：對照表已有內容時修改字典，顯示「請清除重新開始」提示')
+
+    // 側邊欄：清除後對照表清空、代號從 A 重新編；新字典生效；相對時間保留
+    await panel.getByRole('button', { name: '清除，重新開始' }).click()
+    check(await panel.locator('#dict-banner').isHidden() && (await panel.locator('#mapping tr').count()) === 0, '側邊欄：「清除，重新開始」清空對照表與提示')
+    const panelRun = async (text: string) => {
+      await panel.locator('#source').fill(text)
+      await panel.getByRole('button', { name: '去識別化' }).click()
+      await panel.waitForFunction(() => document.getElementById('deid-note')?.textContent !== '處理中…', null, { timeout: 60_000 })
+      return { out: (await panel.locator('#result').textContent()) ?? '', note: (await panel.locator('#deid-note').textContent()) ?? '' }
+    }
+    const again = await panelRun('阿土伯今天血壓偏高，陳美華說阿土伯最近睡不好。')
+    console.log(`  ${again.out}`)
+    check(again.out.startsWith('〔病人A〕今天血壓偏高'), '側邊欄：字典自訂類型生效（〔病人A〕），相對時間「今天」保留')
+    check(again.out.includes('〔人物A〕'), '側邊欄：清除後代號從 A 重新編號')
+
+    // 信心門檻：調到 1 → 所有模型實體都算低信心，以黃色標記
+    await opt.locator('#threshold').fill('1')
+    await opt.locator('#threshold-form button[type=submit]').click()
+    await opt.getByText('已儲存').waitFor({ timeout: 5_000 })
+    await panel.getByRole('button', { name: '清除，重新開始' }).click()
+    await panelRun('王小明在台中榮民總醫院就診。')
+    const marks = await panel.locator('#result mark').count()
+    check(marks > 0 && (await panel.locator('#low-note').isVisible()), `信心門檻調為 1：側邊欄以黃色標記 ${marks} 處並顯示說明`)
+    r = await call(page, request([{ id: '0:0', text: '王小明在台中榮民總醫院就診。' }]), 120_000)
+    check(r.data?.low_confidence?.length > 0, '信心門檻調為 1：呼叫端收到 low_confidence')
+    await opt.locator('#threshold').fill('0.7')
+    await opt.locator('#threshold-form button[type=submit]').click()
+
+    // 側邊欄：超過字數上限
+    const big = await panelRun('王'.repeat(20001))
+    check(big.note.includes('超過 20000 字'), '側邊欄：超過字數上限時顯示錯誤')
+
+    // 撤銷 → 再被詢問 → 拒絕 → 不再詢問 → 取消拒絕 → 再次詢問 → 允許
+    await opt.reload()
+    await opt.locator('#approved li', { hasText: cid }).getByRole('button', { name: '撤銷' }).click()
+    await opt.locator('#approved li', { hasText: cid }).waitFor({ state: 'detached', timeout: 5_000 })
+    const pop2 = ctx.waitForEvent('page', { predicate: (p) => p.url().includes('/approve.html'), timeout: 10_000 })
+    r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
+    check(r.data?.code === 'NOT_APPROVED', '撤銷後 deidentify 回 NOT_APPROVED')
+    const denyPopup = await pop2
+    check(true, '撤銷後再呼叫，重新跳出核准視窗')
+    await denyPopup.getByRole('button', { name: '拒絕' }).click()
+    await denyPopup.getByText('已拒絕').waitFor({ timeout: 5_000 })
+    await denyPopup.waitForEvent('close', { timeout: 10_000 })
+    r = await call(page, request([{ id: '0:0', text: '王小明' }]), 10_000)
+    check(r.data?.code === 'NOT_APPROVED' && String(r.data.error).includes('已拒絕'), '拒絕後 deidentify 回「使用者已拒絕」')
+    await page.waitForTimeout(1500)
+    check(approvePages(ctx).length === 0, '拒絕後再呼叫，不再跳出核准視窗')
+    await opt.locator('#denied li', { hasText: cid }).waitFor({ timeout: 5_000 })
+    check(true, '設定頁「已拒絕」列出該擴充功能')
+    await opt.locator('#denied li', { hasText: cid }).getByRole('button', { name: '取消拒絕' }).click()
+    await opt.locator('#denied li', { hasText: cid }).waitFor({ state: 'detached', timeout: 5_000 })
+    const pop3 = ctx.waitForEvent('page', { predicate: (p) => p.url().includes('/approve.html'), timeout: 10_000 })
+    await call(page, { type: 'ping' }, 3000)
+    await approveInPopup(await pop3)
+    await waitReady(page)
+    check(true, '取消拒絕後再呼叫會重新詢問，允許後恢復可用')
   } finally {
     await ctx.close()
     rmSync(userDir, { recursive: true, force: true })
