@@ -6,9 +6,26 @@ Chrome MV3「服務擴充功能」：在本機用 [CKIP](https://github.com/ckip
 - 誰可以呼叫由使用者決定：第一次呼叫的擴充功能會列在設定頁的「待核准」，使用者按「允許」後才放行。
 - 擴充功能 ID：`fdchmnlidiijkhofoemcmpepibdnmgli`（由 `service.yaml` 的公鑰決定，未封裝載入也固定）。
 
-完整規格與決策紀錄見 [SPEC.md](SPEC.md)；協定範例見 [test/fixtures/contract/](test/fixtures/contract/)。
+完整規格與決策紀錄見 [SPEC.md](SPEC.md)。
 
-## 給呼叫端
+## 安裝
+
+1. 到 [Releases](https://github.com/yao-care/deid-ckip/releases/latest) 下載 `deid-ckip-<版本>.zip`（已含模型，約 19 MB），解壓縮到固定位置（之後不要刪除或移動）。
+2. 在 Chrome 網址列輸入 `chrome://extensions`，打開右上角「開發人員模式」。
+3. 按「載入未封裝項目」，選剛才解壓縮的資料夾。
+4. 看到「去識別化（CKIP）」、ID 為 `fdchmnlidiijkhofoemcmpepibdnmgli` 即完成。
+
+上架 Chrome 線上應用程式商店後，改為在商店直接安裝（見 SPEC 11.4）。
+
+### 第一次被其他擴充功能使用時
+
+1. 其他擴充功能（例如 research-evidence）第一次呼叫時，會先被擋下，並顯示「去識別化擴充功能沒有回應」。
+2. deid-ckip 的圖示會出現數字徽章。點圖示開啟設定頁，在「待核准」中確認是你信任的擴充功能（可到 `chrome://extensions` 比對 ID）後按「允許」。
+3. 回到原本的擴充功能按重試即可。之後可在設定頁隨時撤銷。
+
+設定頁也可以調整信心門檻，並貼一段文字測試替換結果（只在記憶體處理，不保存）。
+
+## 給呼叫端開發者
 
 ```js
 chrome.runtime.sendMessage('fdchmnlidiijkhofoemcmpepibdnmgli', { type: 'ping' }, (res) => {
@@ -23,15 +40,9 @@ chrome.runtime.sendMessage('fdchmnlidiijkhofoemcmpepibdnmgli', { type: 'ping' },
 | `{ type: 'capabilities' }` | `{ entity_types, max_chars_per_request }` | 3 秒 |
 | `{ type: 'deidentify', request_id, texts, entity_types, dictionary, existing_mapping, pseudonym_style }` | `{ request_id, texts, mapping, counts, low_confidence }` | 120 秒 |
 
-錯誤回覆為 `{ error, code }`，`code` 可能是 `INVALID`、`TOO_LARGE`、`NOT_APPROVED`、`MODEL_NOT_READY`、`INTERNAL`。細節見 SPEC 第 3 節。
+錯誤回覆為 `{ error, code }`，`code` 可能是 `INVALID`、`TOO_LARGE`、`NOT_APPROVED`、`MODEL_NOT_READY`、`INTERNAL`。細節見 SPEC 第 3 節，範例見 [test/fixtures/contract/](test/fixtures/contract/)。
 
-### 核准流程
-
-1. 呼叫端第一次 `ping` 會收到 `ready: false, approved: false`（呼叫端通常顯示「沒有回應」並提供重試）。
-2. deid-ckip 圖示出現待核准數量徽章。點圖示開啟設定頁，在「待核准」中確認擴充功能 ID（可到 `chrome://extensions` 比對）後按「允許」。
-3. 回到呼叫端重試。之後可在設定頁隨時撤銷。
-
-## 安裝（本機載入未封裝）
+## 從原始碼建置（開發者）
 
 需要 Node 22 以上、pnpm 10、Python 3.12（只在轉換模型時需要）。
 
@@ -46,7 +57,7 @@ uv pip install --python .venv/bin/python -r scripts/requirements.txt
 pnpm build
 ```
 
-`pnpm build` 會核對 `models/` 的 sha256 與 `model-manifest.json` 一致，輸出 `dist/deid-ckip/` 與 `dist/deid-ckip-<版本>.zip`。在 `chrome://extensions` 開啟開發人員模式，選「載入未封裝項目」，指向 `dist/deid-ckip/`。
+`pnpm build` 會核對 `models/` 的 sha256 與 `model-manifest.json` 一致，輸出 `dist/deid-ckip/` 與 `dist/deid-ckip-<版本>.zip`（即 Releases 上的檔案）。
 
 `scripts/requirements.txt` 的版本針對 Intel Mac（torch 2.2.2 是最後支援的版本）；其他平台可用較新的 torch，但轉換後會與 PyTorch 比對標籤一致率，低於 0.97 就停止。
 
