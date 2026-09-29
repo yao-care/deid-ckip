@@ -90,6 +90,7 @@ $('copy-restored').addEventListener('click', () => void copy($('restored').textC
 
 $('clear').addEventListener('click', () => {
   mapping = {}
+  $('dict-banner').hidden = true
   for (const id of ['source', 'reply'] as const) $<HTMLTextAreaElement>(id).value = ''
   $('result-section').hidden = true
   $('restored').hidden = true
@@ -99,7 +100,9 @@ $('clear').addEventListener('click', () => {
 })
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.pending_callers) void showPending()
+  if (area !== 'local') return
+  if (changes.pending_callers) void showPending()
+  if (changes.dictionary && Object.keys(mapping).length > 0) $('dict-banner').hidden = false
 })
 
 void showPending()

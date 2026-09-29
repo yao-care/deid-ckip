@@ -1,4 +1,17 @@
 <!doctype html>
+<html lang="zh-Hant">
 <meta charset="utf-8" />
 <title>deid-ckip 測試呼叫端</title>
+<style>
+  body { font: 15px/1.6 system-ui, "PingFang TC", sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+  textarea { width: 100%; font: inherit; }
+  pre { white-space: pre-wrap; background: #f5f5f4; padding: 12px; border-radius: 6px; }
+  button { font: inherit; padding: 4px 14px; }
+</style>
+<h1>測試呼叫端</h1>
+<p>模擬 research-evidence 這類擴充功能，呼叫 deid-ckip。</p>
+<textarea id="text" rows="4">王小明於2023年3月5日在台中榮民總醫院就診，由林醫師看診。</textarea>
+<p><button id="ping">1. 偵測（ping）</button> <button id="deid">2. 去識別化</button></p>
+<pre id="out">（結果顯示在這裡）</pre>
 <script src="caller.js"></script>
+</html>

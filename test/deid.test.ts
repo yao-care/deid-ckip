@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codeFor, codeLetter, deidentify, protectedSpans, restore, type DeidInput } from '../src/deid.ts'
+import { codeFor, codeLetter, deidentify, isRelativeTime, protectedSpans, restore, type DeidInput } from '../src/deid.ts'
 import type { Entity } from '../src/ner.ts'
 
 const STYLE = '〔{role}{letter}〕'
@@ -178,5 +178,26 @@ describe('restore（側邊欄還原）', () => {
       threshold: 0.7,
     })
     expect(restore(r.texts[0]!.text, r.mapping)).toBe(text)
+  })
+})
+
+describe('相對時間保留原樣', () => {
+  it.each(['今天', '昨晚', '上週', '上個月', '去年', '明年', '這陣子', '三個月', '十年', '兩年半', '兩週後', '3天', '半年前', '六十二歲', '三個多月', '早上', '下午', '最近', '目前', '每天'])('%s 保留', (t) => {
+    expect(isRelativeTime(t)).toBe(true)
+  })
+
+  it.each(['2023年3月5日', '三月五日', '2024年', '5月12日', '上午十點', '10:30', '民國112年', '週三上午', '十月', '三月', '5日', '2024年前'])('%s 替換', (t) => {
+    expect(isRelativeTime(t)).toBe(false)
+  })
+
+  it('模型標成 DATE 的相對時間不替換，具體日期照常替換', () => {
+    const text = '阿土伯今天血壓偏高，2023年3月5日回診'
+    const r = run({
+      texts: [{ id: 'a', text }],
+      entities: { a: ents(text, [['今天', 'DATE'], ['2023年3月5日', 'DATE']]) },
+      dictionary: [{ term: '阿土伯', type: '病人' }],
+    })
+    expect(r.texts[0]!.text).toBe('〔病人A〕今天血壓偏高，〔日期A〕回診')
+    expect(r.counts).toEqual({ 病人: 1, DATE: 1 })
   })
 })

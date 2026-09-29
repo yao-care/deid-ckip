@@ -3,5 +3,10 @@
   "name": "deid-ckip 測試呼叫端",
   "version": "0.0.1",
   "description": "端對端測試用：模擬呼叫端，從擴充功能頁面送 deid@1 訊息。",
-  "background": { "service_worker": "background.js" }
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "deid-ckip 測試呼叫端"
+  }
 }

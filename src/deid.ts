@@ -100,6 +100,24 @@ function matchTerms(text: string, terms: { term: string; type: string }[], block
   return out
 }
 
+// 相對或籠統的時間說法（今天、上週、三個月、早上）無法指出特定個人，替換只會讓 AI 看不懂；
+// 模型標成 DATE/TIME 時保留原樣。具體日期與時刻（2023年3月5日、三月五日、上午十點）照常替換。
+const NUM = '[0-9０-９一二三四五六七八九十百千兩幾數半多]'
+const SUFFIX = '(多|半)?(左右|以上|以內|之內|內|前|後|來|間)?'
+const RELATIVE_TIME = [
+  new RegExp('^(今|昨|前|明|後|本|上|下|這|那|去|隔|當|同|每|近)(一)?(個)?(天|日|晚|早|夜|週|周|星期|禮拜|月|年|季|次|陣子)'),
+  // 時間長度：三天、兩週、三個月（「三月」是具體月份，不算）、十年（最多兩位數；「2024年」是具體年份，不算）
+  new RegExp(`^${NUM}{1,4}(多)?(天|週|周|星期|禮拜|季|小時|鐘頭|分鐘|秒|歲)${SUFFIX}$`),
+  new RegExp(`^${NUM}{1,4}(多)?個(多)?(月|星期|禮拜|鐘頭)${SUFFIX}$`),
+  new RegExp(`^${NUM}{1,2}(多)?年${SUFFIX}$`),
+  /^(早上|上午|中午|下午|傍晚|晚上|凌晨|半夜|清晨|白天|夜間|夜裡|平日|週末|周末|假日|最近|近來|目前|現在|當時|過去|未來|以前|之前|之後|以後|稍早|稍後|日前|近日|今|昨|明)$/,
+]
+
+export function isRelativeTime(text: string): boolean {
+  const t = text.replace(/\s/g, '')
+  return RELATIVE_TIME.some((re) => re.test(t))
+}
+
 /** 已知原文再次出現時沿用代號；單字元不掃（例如「林」會誤中「森林」）。 */
 const MIN_KNOWN_LEN = 2
 
@@ -119,6 +137,7 @@ export function deidentify(input: DeidInput): DeidOutput {
       .filter((e) => allowed.has(e.type) && e.end > e.start && e.start >= 0 && e.end <= text.length)
       .map((e) => trim(text, e))
       .filter((e): e is Span => !!e && !blocked.some((b) => overlaps(b, e)))
+      .filter((e) => !((e.type === 'DATE' || e.type === 'TIME') && isRelativeTime(text.slice(e.start, e.end))))
       .sort((a, b) => a.start - b.start)
       .filter((e, k, arr) => k === 0 || e.start >= arr[k - 1]!.end)
     const spans = [...dict, ...model].sort((a, b) => a.start - b.start)
